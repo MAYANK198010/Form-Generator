@@ -1,0 +1,8 @@
+{
+  "name": "Ecast Forms - Custom Survey & Form Builder",
+  "description": "Google Forms-style intuitive drag-and-drop survey builder with real-time analytics, response tracking, and automated export options hosted for form.ecast.store.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
