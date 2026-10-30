@@ -15,7 +15,11 @@ import {
   Globe,
   Zap,
   ShieldCheck,
-  AlertCircle
+  AlertCircle,
+  ExternalLink,
+  Radio,
+  Lock,
+  Eye
 } from 'lucide-react';
 import { Form, FormSubmission } from '../types/form';
 import { exportToCSV, exportToJSON, exportToTSV, simulateWebhookDispatch } from '../utils/export';
@@ -27,6 +31,7 @@ interface ShareExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdateForm: (updated: Form) => void;
+  onOpenRespondentView?: () => void;
 }
 
 export const ShareExportModal: React.FC<ShareExportModalProps> = ({
@@ -35,9 +40,11 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
   isOpen,
   onClose,
   onUpdateForm,
+  onOpenRespondentView,
 }) => {
-  const [activeTab, setActiveTab] = useState<'export' | 'webhook' | 'share' | 'embed'>('export');
+  const [activeTab, setActiveTab] = useState<'share' | 'export' | 'webhook' | 'embed'>('share');
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedAltLink, setCopiedAltLink] = useState(false);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
   const [isTestingWebhook, setIsTestingWebhook] = useState(false);
   const [webhookResult, setWebhookResult] = useState<{
@@ -58,19 +65,44 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
     totalAutoDispatched: 0,
   };
 
-  const publicUrl = `https://${form.settings?.customDomain || 'form.ecast.store'}/s/${form.settings?.customSlug || 'survey-2026'}`;
-  const embedCode = `<iframe src="${publicUrl}" width="100%" height="700" frameborder="0" marginheight="0" marginwidth="0" style="border-radius: 16px; border: 1px solid #e2e8f0; max-width: 800px; width: 100%;">Loading survey...</iframe>`;
+  const isLive = form.settings?.isLive ?? true;
+  const customSlug = form.settings?.customSlug || 'survey-2026';
+  const customDomain = form.settings?.customDomain || 'form.ecast.store';
+
+  // Dedicated Respondent URLs (Read-Only)
+  const publicProductionUrl = `https://${customDomain}/?s=${customSlug}`;
+  const publicCurrentHostUrl = `${window.location.origin}/?s=${customSlug}`;
+  const embedCode = `<iframe src="${publicProductionUrl}" width="100%" height="700" frameborder="0" marginheight="0" marginwidth="0" style="border-radius: 16px; border: 1px solid #e2e8f0; max-width: 800px; width: 100%;">Loading survey...</iframe>`;
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(publicUrl);
+    navigator.clipboard.writeText(publicProductionUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  const handleCopyAltLink = () => {
+    navigator.clipboard.writeText(publicCurrentHostUrl);
+    setCopiedAltLink(true);
+    setTimeout(() => setCopiedAltLink(false), 2000);
   };
 
   const handleCopyEmbed = () => {
     navigator.clipboard.writeText(embedCode);
     setCopiedEmbed(true);
     setTimeout(() => setCopiedEmbed(false), 2000);
+  };
+
+  const toggleGoLive = () => {
+    const nextLive = !isLive;
+    onUpdateForm({
+      ...form,
+      settings: {
+        ...form.settings,
+        isLive: nextLive,
+        publishedAt: nextLive ? new Date().toISOString() : form.settings.publishedAt,
+      },
+      updatedAt: new Date().toISOString(),
+    });
   };
 
   const handleTestWebhook = async () => {
@@ -115,19 +147,28 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col border border-slate-100 overflow-hidden">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col border border-slate-100 overflow-hidden">
         {/* Header */}
         <div className="p-6 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <Share2 className="w-5 h-5" />
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              isLive ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+            }`}>
+              <Radio className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900">
-                Share, Export & Automated Integrations
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-bold text-slate-900">
+                  Go Live & Share Respondent Link
+                </h3>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  isLive ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {isLive ? '● Live' : '○ Draft'}
+                </span>
+              </div>
               <p className="text-xs text-slate-500">
-                Host domain: <span className="font-mono text-indigo-600 font-semibold">{form.settings.customDomain}</span>
+                Share this link with respondents so they can only fill the survey without editing questions.
               </p>
             </div>
           </div>
@@ -144,6 +185,18 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
         <div className="px-6 border-b border-slate-100 flex gap-4 text-xs font-semibold">
           <button
             type="button"
+            onClick={() => setActiveTab('share')}
+            className={`py-3 border-b-2 transition-all flex items-center gap-1.5 ${
+              activeTab === 'share'
+                ? 'border-indigo-600 text-indigo-600 font-bold'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Globe className="w-4 h-4" />
+            Respondent Link & Go Live
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('export')}
             className={`py-3 border-b-2 transition-all flex items-center gap-1.5 ${
               activeTab === 'export'
@@ -152,7 +205,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
             }`}
           >
             <Download className="w-4 h-4" />
-            Direct Export
+            Direct Export (CSV/JSON)
           </button>
           <button
             type="button"
@@ -164,19 +217,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
             }`}
           >
             <Webhook className="w-4 h-4" />
-            Automated Webhook & Sync
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('share')}
-            className={`py-3 border-b-2 transition-all flex items-center gap-1.5 ${
-              activeTab === 'share'
-                ? 'border-indigo-600 text-indigo-600 font-bold'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Globe className="w-4 h-4" />
-            Link & QR Code
+            Automated Webhook
           </button>
           <button
             type="button"
@@ -194,7 +235,135 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
 
         {/* Body */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
-          {/* TAB 1: DIRECT EXPORT */}
+          {/* TAB 1: RESPONDENT LINK & GO LIVE */}
+          {activeTab === 'share' && (
+            <div className="space-y-5">
+              {/* Go Live Toggle Card */}
+              <div className={`p-4 rounded-2xl border flex items-center justify-between gap-4 transition-all ${
+                isLive
+                  ? 'bg-emerald-50/70 border-emerald-200'
+                  : 'bg-amber-50/70 border-amber-200'
+              }`}>
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm text-slate-900">
+                      {isLive ? 'Survey is Live on the Web' : 'Survey is currently in Draft'}
+                    </span>
+                    <span className={`w-2 h-2 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+                  </div>
+                  <p className="text-slate-600 text-xs">
+                    {isLive
+                      ? 'Respondents with the link below can now fill out and submit responses.'
+                      : 'Make this survey live so respondents can access and submit answers.'}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={toggleGoLive}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 shadow-xs ${
+                    isLive
+                      ? 'bg-white hover:bg-rose-50 text-rose-700 border border-slate-200 hover:border-rose-300'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm hover:scale-101'
+                  }`}
+                >
+                  {isLive ? 'Switch to Draft' : '🚀 Go Live Now'}
+                </button>
+              </div>
+
+              {/* Protected Respondent Link Card */}
+              <div className="bg-slate-50/80 rounded-2xl border border-slate-200 p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-emerald-600" />
+                    <span className="font-bold text-slate-900 text-sm">
+                      Public Respondent Link (Read-Only)
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">
+                    Protected: Cannot Edit Questions
+                  </span>
+                </div>
+
+                <p className="text-slate-600 text-xs leading-relaxed">
+                  Share this link with your audience. When opened, it only displays the survey questions. Respondents <strong>cannot edit</strong> questions, access the builder, or see your responses.
+                </p>
+
+                {/* Primary Production URL */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-600">
+                    Production URL (for form.ecast.store):
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={publicProductionUrl}
+                      className="flex-1 bg-white border border-slate-200 rounded-xl px-3.5 py-2 font-mono text-xs text-indigo-700 font-semibold focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCopyLink}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold text-xs hover:bg-indigo-700 transition-colors flex items-center gap-1.5 shrink-0 shadow-xs"
+                    >
+                      {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedLink ? 'Copied!' : 'Copy Link'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Current Host URL for immediate testing */}
+                <div className="space-y-1 pt-1">
+                  <label className="text-[11px] font-semibold text-slate-600">
+                    Current Environment Link (for immediate browser testing):
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={publicCurrentHostUrl}
+                      className="flex-1 bg-white border border-slate-200 rounded-xl px-3.5 py-2 font-mono text-xs text-slate-700 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCopyAltLink}
+                      className="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl font-semibold text-xs transition-colors flex items-center gap-1 shrink-0"
+                    >
+                      {copiedAltLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedAltLink ? 'Copied' : 'Copy'}
+                    </button>
+                    <a
+                      href={publicCurrentHostUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-2 bg-slate-900 text-white rounded-xl font-semibold text-xs hover:bg-slate-800 transition-colors flex items-center gap-1 shrink-0"
+                      title="Open in new tab to test respondent view"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Test as Respondent</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              {/* QR Code Section */}
+              <div className="border border-slate-200/90 rounded-2xl p-5 bg-white flex flex-col sm:flex-row items-center gap-6">
+                <SurveyQRCode url={publicProductionUrl} size={135} />
+
+                <div className="space-y-2 text-center sm:text-left">
+                  <h5 className="font-bold text-slate-900 text-sm">Scan to Fill Survey</h5>
+                  <p className="text-slate-500 text-xs max-w-xs leading-relaxed">
+                    Print this QR code on flyers, packaging, menus, or slides. Respondents can scan from their phone and submit responses directly.
+                  </p>
+                  <div className="text-[11px] text-emerald-700 font-medium">
+                    ✓ Directs to respondent mode only (no editor access)
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: DIRECT EXPORT */}
           {activeTab === 'export' && (
             <div className="space-y-4">
               <div>
@@ -296,7 +465,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: AUTOMATED WEBHOOK & SYNC */}
+          {/* TAB 3: AUTOMATED WEBHOOK & SYNC */}
           {activeTab === 'webhook' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -412,53 +581,6 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: SHARE LINK & QR CODE */}
-          {activeTab === 'share' && (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <label className="font-bold text-slate-900 text-sm">Direct Hosted Survey Link</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={publicUrl}
-                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 font-mono text-xs text-indigo-700 font-semibold focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleCopyLink}
-                    className="px-4 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-slate-800 transition-colors flex items-center gap-1.5 shrink-0"
-                  >
-                    {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copiedLink ? 'Copied!' : 'Copy Link'}
-                  </button>
-                </div>
-              </div>
-
-              {/* QR Code Section */}
-              <div className="border border-slate-200/90 rounded-2xl p-6 bg-slate-50/60 flex flex-col sm:flex-row items-center gap-6">
-                <SurveyQRCode url={publicUrl} size={150} />
-
-                <div className="space-y-2 text-center sm:text-left">
-                  <h5 className="font-bold text-slate-900 text-sm">Scan to Open Survey</h5>
-                  <p className="text-slate-500 text-xs max-w-xs leading-relaxed">
-                    Print this QR code on packaging, presentation slides, posters, or menus to collect instant feedback from smartphones.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      alert('QR code ready for download or screenshot.');
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-semibold hover:border-slate-300 shadow-xs"
-                  >
-                    <QrCode className="w-3.5 h-3.5" />
-                    Download Vector QR
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* TAB 4: EMBED IFRAME */}
           {activeTab === 'embed' && (
             <div className="space-y-4">
@@ -484,7 +606,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
               </div>
 
               <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70 text-slate-500 text-[11px]">
-                Tip: The embedded survey automatically resizes responsively and submits securely to <code className="text-indigo-600 font-mono">form.ecast.store</code>.
+                Tip: Embedded surveys only render the respondent view. Visitors cannot access your editing studio or edit questions.
               </div>
             </div>
           )}
@@ -492,8 +614,10 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
 
         {/* Footer */}
         <div className="p-4 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between">
-          <div className="text-[11px] text-slate-500 font-mono">
-            Ecast Forms Sync Engine v1.0
+          <div className="text-[11px] text-slate-500 flex items-center gap-2">
+            <span className="font-semibold text-slate-700">form.ecast.store</span>
+            <span>•</span>
+            <span>Respondent-only link generation</span>
           </div>
           <button
             type="button"

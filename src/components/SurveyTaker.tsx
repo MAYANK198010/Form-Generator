@@ -193,6 +193,31 @@ export const SurveyTaker: React.FC<SurveyTakerProps> = ({
     },
   }[form.theme.accentColor || 'indigo'];
 
+  // If survey is in draft mode (not published) and respondent is trying to access
+  if (form.settings.isLive === false && !isPreviewMode) {
+    return (
+      <div className="min-h-screen bg-slate-100/70 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-slate-200 shadow-sm space-y-4 text-center">
+          <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
+            <Clock className="w-7 h-7" />
+          </div>
+          <div className="space-y-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">
+              Draft Survey
+            </span>
+            <h2 className="text-xl font-bold text-slate-900 pt-2">{form.title}</h2>
+          </div>
+          <p className="text-slate-600 text-xs leading-relaxed">
+            This survey is currently in <strong>Draft mode</strong> and has not been published live yet by the organizer.
+          </p>
+          <div className="pt-2 text-[11px] text-slate-400">
+            If you are the survey creator, please open your Creator Studio and click <strong>"Go Live"</strong> to publish it.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!form.settings.isAcceptingResponses) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center">

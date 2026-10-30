@@ -54,6 +54,8 @@ export interface FormSettings {
   description: string;
   customDomain: string; // e.g. "form.ecast.store"
   customSlug: string;   // e.g. "customer-feedback-2026"
+  isLive: boolean;      // Whether survey is published and accessible to public respondents
+  publishedAt?: string;
   isAcceptingResponses: boolean;
   closedMessage: string;
   confirmationMessage: string;

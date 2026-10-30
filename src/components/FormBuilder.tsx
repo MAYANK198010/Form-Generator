@@ -16,6 +16,8 @@ interface FormBuilderProps {
   onUpdateForm: (updated: Form) => void;
   onPreview: () => void;
   onOpenTheme: () => void;
+  onOpenExport?: () => void;
+  onToggleLive?: () => void;
 }
 
 export const FormBuilder: React.FC<FormBuilderProps> = ({
@@ -23,6 +25,8 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
   onUpdateForm,
   onPreview,
   onOpenTheme,
+  onOpenExport,
+  onToggleLive,
 }) => {
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(
     form.fields.length > 0 ? form.fields[0].id : null
@@ -388,15 +392,44 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
                 />
               </div>
 
-              {/* Host Domain & Quick Slug Configuration */}
+              {/* Host Domain, Live Status & Actions */}
               <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2 text-slate-600">
-                  <Globe className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                  <span>Hosted Target URL:</span>
+                <div className="flex flex-wrap items-center gap-2 text-slate-600">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                        form.settings.isLive
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : 'bg-amber-50 text-amber-700 border border-amber-200'
+                      }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          form.settings.isLive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'
+                        }`}
+                      />
+                      {form.settings.isLive ? 'Live & Accepting Responses' : 'Draft (Not Live)'}
+                    </span>
+
+                    {onToggleLive && (
+                      <button
+                        type="button"
+                        onClick={onToggleLive}
+                        className={`text-[11px] font-bold px-2 py-0.5 rounded-lg transition-colors ${
+                          form.settings.isLive
+                            ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                        }`}
+                      >
+                        {form.settings.isLive ? 'Pause / Draft' : '🚀 Go Live'}
+                      </button>
+                    )}
+                  </div>
+
                   <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 font-mono text-[11px] text-slate-800">
-                    <span className="text-slate-400 font-sans">https://</span>
+                    <Globe className="w-3 h-3 text-indigo-500 shrink-0" />
                     <span className="font-semibold text-indigo-600">form.ecast.store</span>
-                    <span className="text-slate-400">/s/</span>
+                    <span className="text-slate-400">/?s=</span>
                     <input
                       type="text"
                       value={form.settings.customSlug}
@@ -420,8 +453,18 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    AI Survey Assistant
+                    AI Assistant
                   </button>
+
+                  {onOpenExport && (
+                    <button
+                      type="button"
+                      onClick={onOpenExport}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
+                    >
+                      <span>Share Link</span>
+                    </button>
+                  )}
 
                   <button
                     type="button"

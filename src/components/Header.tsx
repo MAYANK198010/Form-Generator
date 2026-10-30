@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   FileText,
   Palette,
@@ -10,7 +10,13 @@ import {
   BarChart2,
   Sliders,
   ChevronDown,
-  Layers
+  Layers,
+  Radio,
+  Globe,
+  Check,
+  Copy,
+  ExternalLink,
+  ShieldAlert
 } from 'lucide-react';
 import { Form } from '../types/form';
 
@@ -24,6 +30,8 @@ interface HeaderProps {
   onOpenExport: () => void;
   onOpenFormSwitcher: () => void;
   onNewForm: () => void;
+  onToggleLive: () => void;
+  onOpenPublicLink: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -36,11 +44,24 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenExport,
   onOpenFormSwitcher,
   onNewForm,
+  onToggleLive,
+  onOpenPublicLink,
 }) => {
+  const [copiedLink, setCopiedLink] = useState(false);
+  const isLive = currentForm.settings.isLive;
+
+  const handleCopyRespondentLink = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const respondentUrl = `${window.location.origin}/?s=${currentForm.settings.customSlug}`;
+    navigator.clipboard.writeText(respondentUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200/90 shadow-2xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between h-16 gap-4">
+        <div className="flex items-center justify-between h-16 gap-3 sm:gap-4">
           {/* Brand & Form Selector */}
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
@@ -56,13 +77,30 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <div className="min-w-0">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 flex items-center gap-1">
-                    <span>Ecast Forms</span>
+                    <span>Ecast Studio</span>
                     <span className="text-slate-300">•</span>
                     <span className="text-slate-500 font-mono lowercase">form.ecast.store</span>
                   </div>
-                  <h1 className="text-sm font-bold text-slate-900 truncate max-w-[180px] sm:max-w-[260px]">
-                    {currentForm.title || 'Untitled Survey'}
-                  </h1>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-sm font-bold text-slate-900 truncate max-w-[140px] sm:max-w-[220px]">
+                      {currentForm.title || 'Untitled Survey'}
+                    </h1>
+                    {/* Live/Draft Badge */}
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                        isLive
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : 'bg-amber-50 text-amber-700 border border-amber-200'
+                      }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          isLive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'
+                        }`}
+                      />
+                      {isLive ? 'Live' : 'Draft'}
+                    </span>
+                  </div>
                 </div>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 shrink-0" />
               </button>
@@ -149,14 +187,35 @@ export const Header: React.FC<HeaderProps> = ({
               <span>Preview</span>
             </button>
 
-            {/* Send / Export CTA Button */}
+            {/* "Go Live" Primary Action Toggle */}
+            <button
+              type="button"
+              onClick={onToggleLive}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                isLive
+                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm hover:scale-101 active:scale-99'
+              }`}
+              title={
+                isLive
+                  ? 'Survey is Live! Click to pause or switch back to Draft'
+                  : 'Click to make this survey LIVE for respondents'
+              }
+            >
+              <Radio className={`w-3.5 h-3.5 ${isLive ? 'text-emerald-600 animate-pulse' : 'text-white'}`} />
+              <span>{isLive ? 'Live & Active' : 'Go Live 🚀'}</span>
+            </button>
+
+            {/* Share / Export CTA Button */}
             <button
               type="button"
               onClick={onOpenExport}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-sm hover:shadow"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition-all shadow-sm hover:shadow"
+              title="Get public respondent link, QR code, or export data"
             >
               <Share2 className="w-3.5 h-3.5" />
-              <span>Send & Export</span>
+              <span className="hidden sm:inline">Share Link</span>
+              <span className="sm:hidden">Share</span>
             </button>
           </div>
         </div>
