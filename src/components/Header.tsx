@@ -16,15 +16,20 @@ import {
   Check,
   Copy,
   ExternalLink,
-  ShieldAlert
+  ShieldAlert,
+  User as UserIcon,
+  Cloud,
 } from 'lucide-react';
 import { Form } from '../types/form';
+import { FirebaseUser } from '../lib/firebase';
 
 interface HeaderProps {
   currentForm: Form;
   allForms: Form[];
   currentMode: 'builder' | 'analytics' | 'preview';
   responseCount: number;
+  currentUser: FirebaseUser | null;
+  onOpenAuthModal: () => void;
   onSelectMode: (mode: 'builder' | 'analytics' | 'preview') => void;
   onOpenTheme: () => void;
   onOpenExport: () => void;
@@ -39,6 +44,8 @@ export const Header: React.FC<HeaderProps> = ({
   allForms,
   currentMode,
   responseCount,
+  currentUser,
+  onOpenAuthModal,
   onSelectMode,
   onOpenTheme,
   onOpenExport,
@@ -216,6 +223,30 @@ export const Header: React.FC<HeaderProps> = ({
               <Share2 className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Share Link</span>
               <span className="sm:hidden">Share</span>
+            </button>
+
+            {/* Cloud Account & Multi-Device Sync Button */}
+            <button
+              type="button"
+              onClick={onOpenAuthModal}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-slate-700 hover:text-indigo-700 transition-all"
+              title={currentUser ? `Logged in as ${currentUser.email || 'Creator'} (Synced)` : 'Sign in to sync surveys across devices'}
+            >
+              {currentUser ? (
+                <>
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                    {currentUser.displayName ? currentUser.displayName[0].toUpperCase() : currentUser.email ? currentUser.email[0].toUpperCase() : 'U'}
+                  </div>
+                  <span className="hidden md:inline max-w-[100px] truncate text-[11px] font-medium">
+                    {currentUser.displayName || currentUser.email?.split('@')[0]}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <UserIcon className="w-3.5 h-3.5 text-indigo-600" />
+                  <span className="hidden sm:inline text-xs font-bold text-indigo-600">Sign In</span>
+                </>
+              )}
             </button>
           </div>
         </div>

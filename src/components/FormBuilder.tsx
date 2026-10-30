@@ -104,7 +104,7 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
       ...source,
       id: 'f_' + Math.random().toString(36).substring(2, 9),
       label: `${source.label} (Copy)`,
-      options: source.options ? [...source.options] : undefined,
+      ...(source.options ? { options: [...source.options] } : {}),
     };
 
     const nextFields = [...form.fields];

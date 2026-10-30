@@ -1,0 +1,65 @@
+{
+  "entities": {
+    "Form": {
+      "title": "Form",
+      "description": "Custom survey form definition with fields, theme, and settings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 500 },
+        "description": { "type": "string", "maxLength": 4000 },
+        "ownerUid": { "type": "string", "maxLength": 128 },
+        "ownerEmail": { "type": "string", "maxLength": 255 },
+        "fields": { "type": "array" },
+        "theme": { "type": "object" },
+        "settings": { "type": "object" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "isTemplate": { "type": "boolean" }
+      },
+      "required": ["id", "title", "fields", "settings", "ownerUid"]
+    },
+    "Submission": {
+      "title": "Submission",
+      "description": "Recorded respondent submission for a specific survey",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "formId": { "type": "string", "maxLength": 128 },
+        "submittedAt": { "type": "string" },
+        "durationSeconds": { "type": "number" },
+        "device": { "type": "string", "maxLength": 50 },
+        "location": { "type": "string", "maxLength": 100 },
+        "answers": { "type": "object" },
+        "respondentUid": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "formId", "submittedAt", "answers"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 255 },
+        "displayName": { "type": "string", "maxLength": 255 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    }
+  },
+  "firestore": {
+    "/forms/{formId}": {
+      "schema": "Form",
+      "description": "Survey definitions stored by formId"
+    },
+    "/submissions/{submissionId}": {
+      "schema": "Submission",
+      "description": "Public survey responses indexed by submissionId"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User accounts indexed by auth UID"
+    }
+  }
+}

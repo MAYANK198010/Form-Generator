@@ -16,6 +16,19 @@ import {
   SAMPLE_FORMS,
   normalizeForm,
 } from './utils/storage';
+import {
+  auth,
+  onAuthStateChanged,
+  FirebaseUser,
+} from './lib/firebase';
+import {
+  saveFormToCloud,
+  fetchUserFormsFromCloud,
+  fetchPublicFormBySlug,
+  submitResponseToCloud,
+  subscribeToSubmissions,
+  deleteFormFromCloud,
+} from './services/cloudService';
 import { Header } from './components/Header';
 import { FormBuilder } from './components/FormBuilder';
 import { AnalyticsView } from './components/AnalyticsView';
@@ -23,7 +36,16 @@ import { SurveyTaker } from './components/SurveyTaker';
 import { ShareExportModal } from './components/ShareExportModal';
 import { ThemeModal } from './components/ThemeModal';
 import { FormsListModal } from './components/FormsListModal';
-import { CheckCircle2, Zap, ArrowLeft, ShieldCheck, AlertCircle } from 'lucide-react';
+import { AuthModal } from './components/AuthModal';
+import {
+  CheckCircle2,
+  Zap,
+  ArrowLeft,
+  ShieldCheck,
+  AlertCircle,
+  Loader2,
+  Sparkles,
+} from 'lucide-react';
 
 interface RouteState {
   isRespondentView: boolean;
@@ -72,6 +94,15 @@ export default function App() {
   const [currentMode, setCurrentMode] = useState<'builder' | 'analytics' | 'preview'>('builder');
   const [routeState, setRouteState] = useState<RouteState>(() => parseCurrentRoute());
 
+  // Authentication & Cloud Sync State
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  // Respondent View Cloud Fetching
+  const [publicCloudForm, setPublicCloudForm] = useState<Form | null>(null);
+  const [isPublicLoading, setIsPublicLoading] = useState(false);
+  const [publicFetchAttempted, setPublicFetchAttempted] = useState(false);
+
   // Modals
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
@@ -82,6 +113,7 @@ export default function App() {
   useEffect(() => {
     const handleUrlChange = () => {
       setRouteState(parseCurrentRoute());
+      setPublicFetchAttempted(false);
     };
     window.addEventListener('popstate', handleUrlChange);
     window.addEventListener('hashchange', handleUrlChange);
@@ -91,7 +123,32 @@ export default function App() {
     };
   }, []);
 
-  // Persist forms
+  // Firebase Auth State Listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        try {
+          const cloudForms = await fetchUserFormsFromCloud(user);
+          if (cloudForms && cloudForms.length > 0) {
+            setForms((prev) => {
+              const map = new Map<string, Form>();
+              cloudForms.forEach((f) => map.set(f.id, f));
+              prev.forEach((f) => {
+                if (!map.has(f.id)) map.set(f.id, f);
+              });
+              return Array.from(map.values());
+            });
+          }
+        } catch (e) {
+          console.warn('Failed to fetch user forms on login:', e);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Persist forms to local storage
   useEffect(() => {
     saveStoredForms(forms);
   }, [forms]);
@@ -101,7 +158,7 @@ export default function App() {
     saveActiveFormId(activeFormId);
   }, [activeFormId]);
 
-  // Persist submissions
+  // Persist submissions locally
   useEffect(() => {
     saveSubmissions(submissionsMap);
   }, [submissionsMap]);
@@ -111,8 +168,70 @@ export default function App() {
   const currentForm = normalizeForm(rawForm);
   const activeSubmissions = submissionsMap[currentForm.id] || [];
 
+  // Automatically sync active form to cloud so it is immediately accessible from QR codes or any device
+  useEffect(() => {
+    if (currentForm) {
+      saveFormToCloud(currentForm, currentUser).catch((e) => {
+        // Silent background sync
+      });
+    }
+  }, [currentForm.id, currentForm.settings.customSlug, currentForm.settings.isLive]);
+
+  // Real-time Firestore Submissions Listener
+  useEffect(() => {
+    if (!currentForm?.id) return;
+    const unsubscribe = subscribeToSubmissions(currentForm.id, (subs) => {
+      if (subs && subs.length > 0) {
+        setSubmissionsMap((prev) => ({
+          ...prev,
+          [currentForm.id]: subs,
+        }));
+      }
+    });
+    return () => unsubscribe();
+  }, [currentForm?.id]);
+
+  // Public Respondent View: Query Firestore if not present locally (fixes "in other device not found")
+  useEffect(() => {
+    if (routeState.isRespondentView && routeState.slug) {
+      const slug = routeState.slug.toLowerCase().trim();
+      const local = forms.find(
+        (f) =>
+          f.settings.customSlug.toLowerCase() === slug ||
+          f.id.toLowerCase() === slug
+      );
+
+      if (local) {
+        setPublicCloudForm(normalizeForm(local));
+        setIsPublicLoading(false);
+        setPublicFetchAttempted(true);
+      } else {
+        setIsPublicLoading(true);
+        fetchPublicFormBySlug(slug)
+          .then((cloudForm) => {
+            if (cloudForm) {
+              setPublicCloudForm(cloudForm);
+            } else {
+              setPublicCloudForm(null);
+            }
+          })
+          .catch((err) => {
+            console.error('Error fetching public form from Firestore:', err);
+            setPublicCloudForm(null);
+          })
+          .finally(() => {
+            setIsPublicLoading(false);
+            setPublicFetchAttempted(true);
+          });
+      }
+    }
+  }, [routeState.isRespondentView, routeState.slug, forms]);
+
   const handleUpdateCurrentForm = (updated: Form) => {
     setForms((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
+    saveFormToCloud(updated, currentUser).catch((e) => {
+      console.warn('Auto-save to cloud warning:', e);
+    });
   };
 
   const handleSelectForm = (formId: string) => {
@@ -136,7 +255,6 @@ export default function App() {
     if (nextLive) {
       setLiveToast(`🚀 Survey is now LIVE! Your public respondent link is ready to share.`);
       setIsExportModalOpen(true);
-      // Trigger confetti celebration
       import('canvas-confetti').then((mod) => {
         const fn = mod.default || mod;
         if (typeof fn === 'function') {
@@ -259,29 +377,43 @@ export default function App() {
           title: 'Untitled Survey',
           description: '',
           customDomain: 'form.ecast.store',
-          customSlug: 'survey-' + Math.floor(Math.random() * 9000 + 1000),
-          isLive: false, // Default new blank surveys to Draft until creator goes live
+          customSlug: 'form-' + Math.random().toString(36).substring(2, 8),
+          isLive: false,
           isAcceptingResponses: true,
           closedMessage: 'This survey is no longer accepting responses.',
-          confirmationMessage: 'Thank you for your response!',
+          confirmationMessage: 'Your response has been recorded. Thank you!',
           allowMultipleSubmissions: true,
           showQuestionNumbers: true,
           autoExport: {
-            enabled: false,
+            enabled: true,
             frequency: 'realtime',
             format: 'csv',
-            webhookUrl: '',
-            emailRecipients: '',
+            webhookUrl: 'https://api.ecast.store/v1/integrations/surveys',
+            emailRecipients: 'insights@ecast.store',
             totalAutoDispatched: 0,
           },
         },
         fields: [
           {
-            id: 'f_' + Math.random().toString(36).substring(2, 7),
-            type: 'multiple_choice',
-            label: 'Untitled Question',
+            id: 'q_welcome',
+            type: 'short_text',
+            label: 'What is your full name?',
+            required: true,
+            placeholder: 'e.g. Alex Morgan',
+          },
+          {
+            id: 'q_rating',
+            type: 'rating',
+            label: 'How would you rate your overall experience?',
+            required: true,
+            ratingStars: 5,
+          },
+          {
+            id: 'q_feedback',
+            type: 'long_text',
+            label: 'Any comments or suggestions for improvement?',
             required: false,
-            options: ['Option 1', 'Option 2', 'Option 3'],
+            placeholder: 'Type your feedback here...',
           },
         ],
         createdAt: new Date().toISOString(),
@@ -291,7 +423,7 @@ export default function App() {
 
     setForms((prev) => [newForm, ...prev]);
     setActiveFormId(newId);
-    setCurrentMode('builder');
+    saveFormToCloud(newForm, currentUser).catch(() => {});
   };
 
   const handleDuplicateForm = (formId: string) => {
@@ -314,6 +446,7 @@ export default function App() {
 
     setForms((prev) => [cloned, ...prev]);
     setActiveFormId(newId);
+    saveFormToCloud(cloned, currentUser).catch(() => {});
   };
 
   const handleDeleteForm = (formId: string) => {
@@ -321,17 +454,30 @@ export default function App() {
       alert('You must have at least one survey.');
       return;
     }
+    const target = forms.find((f) => f.id === formId);
     const nextForms = forms.filter((f) => f.id !== formId);
     setForms(nextForms);
     if (activeFormId === formId) {
       setActiveFormId(nextForms[0].id);
     }
+    deleteFormFromCloud(formId, target?.settings?.customSlug).catch(() => {});
   };
 
-  const handleSubmitResponse = (submission: Omit<FormSubmission, 'id'>, targetFormId?: string) => {
+  const handleSubmitResponse = async (
+    submission: Omit<FormSubmission, 'id'>,
+    targetFormId?: string
+  ) => {
     const fId = targetFormId || currentForm.id;
+    // 1. Local storage immediate fallback
     const saved = addSubmission(fId, submission);
     setSubmissionsMap(loadSubmissions());
+
+    // 2. Cloud Firestore submission for multi-device sync
+    try {
+      await submitResponseToCloud(fId, submission, currentUser?.uid);
+    } catch (e) {
+      console.warn('Cloud submission sync fallback:', e);
+    }
 
     setLiveToast(`New response received from ${submission.location} (${submission.device})`);
     setTimeout(() => setLiveToast(null), 4000);
@@ -407,7 +553,7 @@ export default function App() {
     ];
     const devices: Array<'Desktop' | 'Mobile' | 'Tablet'> = ['Desktop', 'Mobile', 'Tablet'];
 
-    const newSub = addSubmission(currentForm.id, {
+    handleSubmitResponse({
       formId: currentForm.id,
       submittedAt: new Date().toISOString(),
       durationSeconds: Math.floor(Math.random() * 70) + 50,
@@ -415,34 +561,49 @@ export default function App() {
       location: locations[Math.floor(Math.random() * locations.length)],
       answers: simulatedAnswers,
     });
-
-    setSubmissionsMap(loadSubmissions());
-    setLiveToast(`Live incoming response recorded: ID ${newSub.id.slice(0, 10)}`);
-    setTimeout(() => setLiveToast(null), 4000);
   };
 
   const handleExitRespondentView = () => {
-    // Clear query param and return to studio
     const cleanUrl = window.location.origin + window.location.pathname;
     window.history.pushState({}, '', cleanUrl);
     setRouteState({ isRespondentView: false, slug: null });
+    setPublicCloudForm(null);
   };
 
   /* =======================================================================
      PUBLIC RESPONDENT VIEW (Read-Only Questionnaire)
-     When a respondent opens the shared link:
+     When a respondent opens the shared link or scans the QR code:
      - No editor toolbar
      - No question modifying
      - No dashboard or analytics access
+     - Works from ANY device, smartphone, or tablet
      ======================================================================= */
   if (routeState.isRespondentView && routeState.slug) {
-    const matched = forms.find(
-      (f) =>
-        f.settings.customSlug.toLowerCase() === routeState.slug?.toLowerCase() ||
-        f.id.toLowerCase() === routeState.slug?.toLowerCase()
-    );
+    if (isPublicLoading) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-8 border border-slate-200/80 shadow-md text-center max-w-sm w-full space-y-4">
+            <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto" />
+            <div>
+              <h3 className="font-bold text-slate-800 text-sm">Loading Survey...</h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Fetching questions for <code className="font-mono text-indigo-600 font-semibold">{routeState.slug}</code>
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
-    if (!matched) {
+    const matched =
+      publicCloudForm ||
+      forms.find(
+        (f) =>
+          f.settings.customSlug.toLowerCase() === routeState.slug?.toLowerCase() ||
+          f.id.toLowerCase() === routeState.slug?.toLowerCase()
+      );
+
+    if (!matched && publicFetchAttempted) {
       return (
         <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
           <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-slate-200 shadow-sm text-center space-y-4">
@@ -451,7 +612,10 @@ export default function App() {
             </div>
             <h2 className="text-xl font-bold text-slate-900">Survey Not Found</h2>
             <p className="text-slate-500 text-xs">
-              No survey exists with the slug <code className="bg-slate-100 px-1.5 py-0.5 rounded text-indigo-600 font-mono font-semibold">"{routeState.slug}"</code>.
+              No live survey was found matching <code className="bg-slate-100 px-1.5 py-0.5 rounded text-indigo-600 font-mono font-semibold">"{routeState.slug}"</code>.
+            </p>
+            <p className="text-slate-400 text-[11px]">
+              Please check that the survey was set to <strong>Go Live</strong> by the creator, or verify the URL link.
             </p>
             <button
               type="button"
@@ -466,54 +630,63 @@ export default function App() {
       );
     }
 
-    const normalizedMatched = normalizeForm(matched);
+    if (matched) {
+      const normalizedMatched = normalizeForm(matched);
 
-    return (
-      <div className="min-h-screen bg-slate-100/70 flex flex-col justify-between">
-        <SurveyTaker
-          form={normalizedMatched}
-          isPreviewMode={false}
-          onSubmitResponse={(sub) => handleSubmitResponse(sub, normalizedMatched.id)}
-        />
+      return (
+        <div className="min-h-screen bg-slate-100/70 flex flex-col justify-between">
+          <SurveyTaker
+            form={normalizedMatched}
+            isPreviewMode={false}
+            onSubmitResponse={(sub) => handleSubmitResponse(sub, normalizedMatched.id)}
+          />
 
-        {/* Small discreet footer for creator access */}
-        <footer className="py-4 text-center text-xs text-slate-400 border-t border-slate-200/50 bg-white/40">
-          <button
-            type="button"
-            onClick={handleExitRespondentView}
-            className="hover:text-slate-600 hover:underline transition-colors text-[11px]"
-          >
-            Form Organizer? Open Creator Studio
-          </button>
-        </footer>
-      </div>
-    );
+          {/* Small discreet footer for creator access */}
+          <footer className="py-4 text-center text-xs text-slate-400 border-t border-slate-200/50 bg-white/40">
+            <div className="max-w-md mx-auto px-4 flex items-center justify-between">
+              <span className="font-mono text-[11px] text-slate-400">Powered by form.ecast.store</span>
+              <button
+                type="button"
+                onClick={handleExitRespondentView}
+                className="text-[11px] text-indigo-600 font-semibold hover:underline flex items-center gap-1"
+              >
+                <span>Creator Studio</span>
+                <ArrowLeft className="w-3 h-3 rotate-180" />
+              </button>
+            </div>
+          </footer>
+        </div>
+      );
+    }
   }
 
   /* =======================================================================
-     CREATOR STUDIO / DASHBOARD VIEW
+     CREATOR STUDIO VIEW (Authenticated or Local Builder)
      ======================================================================= */
   return (
-    <div className="min-h-screen bg-slate-100/60 flex flex-col">
-      {/* Global Header */}
-      {currentMode !== 'preview' && (
-        <Header
-          currentForm={currentForm}
-          allForms={forms}
-          currentMode={currentMode}
-          responseCount={activeSubmissions.length}
-          onSelectMode={setCurrentMode}
-          onOpenTheme={() => setIsThemeModalOpen(true)}
-          onOpenExport={() => setIsExportModalOpen(true)}
-          onOpenFormSwitcher={() => setIsFormSwitcherOpen(true)}
-          onNewForm={() => handleCreateNewForm('blank')}
-          onToggleLive={handleToggleGoLive}
-          onOpenPublicLink={() => setIsExportModalOpen(true)}
-        />
-      )}
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      {/* Top Application Bar */}
+      <Header
+        currentForm={currentForm}
+        allForms={forms}
+        currentMode={currentMode}
+        responseCount={activeSubmissions.length}
+        currentUser={currentUser}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onSelectMode={setCurrentMode}
+        onOpenTheme={() => setIsThemeModalOpen(true)}
+        onOpenExport={() => setIsExportModalOpen(true)}
+        onOpenFormSwitcher={() => setIsFormSwitcherOpen(true)}
+        onNewForm={() => handleCreateNewForm('blank')}
+        onToggleLive={handleToggleGoLive}
+        onOpenPublicLink={() => {
+          const url = `${window.location.origin}/?s=${currentForm.settings.customSlug}`;
+          window.open(url, '_blank');
+        }}
+      />
 
-      {/* Main Content Body */}
-      <main className="flex-1">
+      {/* Main Workspace Area */}
+      <main className="flex-1 pb-16">
         {currentMode === 'builder' && (
           <FormBuilder
             form={currentForm}
@@ -582,6 +755,13 @@ export default function App() {
         onDuplicateForm={handleDuplicateForm}
         onDeleteForm={handleDeleteForm}
         onSelectTemplate={handleCreateNewForm}
+      />
+
+      {/* Authentication & Profile Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        currentUser={currentUser}
       />
     </div>
   );

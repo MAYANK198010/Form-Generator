@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Forms collection
+    // Forms can be read publicly so respondents on any device / QR scan can view and answer them
+    match /forms/{formId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if isSignedIn() || resource.data.ownerUid == 'guest' || resource.data.ownerUid == null;
+      allow delete: if isSignedIn() || resource.data.ownerUid == 'guest' || resource.data.ownerUid == null;
+    }
+
+    // Submissions collection
+    // Anyone can submit survey responses (public respondents)
+    // Realtime analytics can read responses
+    match /submissions/{submissionId} {
+      allow create: if true;
+      allow read: if true;
+      allow update, delete: if isSignedIn();
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+  }
+}

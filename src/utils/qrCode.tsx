@@ -1,92 +1,101 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
+import { Download, QrCode as QrIcon } from 'lucide-react';
 
-/**
- * Clean SVG QR Code generator component.
- * Uses pseudo-random deterministic bit pattern based on url hash
- * for crisp presentation & preview, plus download button.
- */
-export const SurveyQRCode: React.FC<{ url: string; size?: number }> = ({ url, size = 160 }) => {
-  // Deterministic pattern generator from string hash
-  const hash = Array.from(url).reduce((acc, char) => (acc * 31 + char.charCodeAt(0)) | 0, 0);
-  const gridSize = 21; // standard QR version 1 is 21x21
-  const cells: boolean[][] = Array.from({ length: gridSize }, () => Array(gridSize).fill(false));
+interface SurveyQRCodeProps {
+  url: string;
+  size?: number;
+}
 
-  // Finder patterns at (0,0), (gridSize-7, 0), (0, gridSize-7)
-  const setFinder = (startX: number, startY: number) => {
-    for (let y = 0; y < 7; y++) {
-      for (let x = 0; x < 7; x++) {
-        if (
-          x === 0 ||
-          x === 6 ||
-          y === 0 ||
-          y === 6 ||
-          (x >= 2 && x <= 4 && y >= 2 && y <= 4)
-        ) {
-          cells[startY + y][startX + x] = true;
+export const SurveyQRCode: React.FC<SurveyQRCodeProps> = ({ url, size = 160 }) => {
+  const [dataUrl, setDataUrl] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!url) return;
+
+    QRCode.toDataURL(url, {
+      width: size * 2, // high DPI
+      margin: 2,
+      errorCorrectionLevel: 'M',
+      color: {
+        dark: '#0f172a',
+        light: '#ffffff',
+      },
+    })
+      .then((res) => {
+        if (isMounted) {
+          setDataUrl(res);
+          setError(null);
         }
-      }
-    }
+      })
+      .catch((err) => {
+        console.error('Failed to generate real QR code:', err);
+        if (isMounted) {
+          setError('Failed to generate QR code');
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [url, size]);
+
+  const handleDownload = () => {
+    if (!dataUrl) return;
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = `survey-qr-${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  setFinder(0, 0);
-  setFinder(gridSize - 7, 0);
-  setFinder(0, gridSize - 7);
-
-  // Timing patterns
-  for (let i = 8; i < gridSize - 8; i++) {
-    cells[6][i] = i % 2 === 0;
-    cells[i][6] = i % 2 === 0;
-  }
-
-  // Pseudo-random data fill based on hash
-  let seed = Math.abs(hash) || 42;
-  for (let y = 0; y < gridSize; y++) {
-    for (let x = 0; x < gridSize; x++) {
-      // Don't overwrite finder patterns
-      const inFinder1 = x < 8 && y < 8;
-      const inFinder2 = x >= gridSize - 8 && y < 8;
-      const inFinder3 = x < 8 && y >= gridSize - 8;
-      const inTiming = x === 6 || y === 6;
-
-      if (!inFinder1 && !inFinder2 && !inFinder3 && !inTiming) {
-        seed = (seed * 9301 + 49297) % 233280;
-        cells[y][x] = seed / 233280 > 0.48;
-      }
-    }
-  }
-
-  const cellSize = size / gridSize;
-
   return (
-    <div className="flex flex-col items-center">
-      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm inline-block">
-        <svg
-          width={size}
-          height={size}
-          viewBox={`0 0 ${size} ${size}`}
-          className="rounded"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <rect width={size} height={size} fill="#ffffff" />
-          {cells.map((row, y) =>
-            row.map((active, x) =>
-              active ? (
-                <rect
-                  key={`${x}-${y}`}
-                  x={x * cellSize}
-                  y={y * cellSize}
-                  width={cellSize + 0.3}
-                  height={cellSize + 0.3}
-                  fill="#0f172a"
-                />
-              ) : null
-            )
-          )}
-        </svg>
+    <div className="flex flex-col items-center space-y-2">
+      <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-center">
+        {dataUrl ? (
+          <img
+            src={dataUrl}
+            alt="Survey QR Code"
+            width={size}
+            height={size}
+            className="rounded-lg select-none"
+          />
+        ) : error ? (
+          <div
+            style={{ width: size, height: size }}
+            className="flex items-center justify-center text-xs text-rose-500 font-medium"
+          >
+            {error}
+          </div>
+        ) : (
+          <div
+            style={{ width: size, height: size }}
+            className="flex items-center justify-center bg-slate-50 text-slate-400 rounded-lg animate-pulse"
+          >
+            <QrIcon className="w-8 h-8 opacity-40" />
+          </div>
+        )}
       </div>
-      <p className="text-xs text-slate-500 mt-2 font-mono break-all text-center max-w-[200px]">
-        {url}
-      </p>
+
+      <div className="flex flex-col items-center gap-1.5">
+        <p className="text-[11px] text-slate-500 font-mono break-all text-center max-w-[220px]">
+          {url}
+        </p>
+
+        {dataUrl && (
+          <button
+            type="button"
+            onClick={handleDownload}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors shadow-2xs"
+          >
+            <Download className="w-3 h-3 text-slate-500" />
+            Download QR PNG
+          </button>
+        )}
+      </div>
     </div>
   );
 };

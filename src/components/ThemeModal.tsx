@@ -136,7 +136,15 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({
             {form.theme.headerBanner && (
               <button
                 type="button"
-                onClick={() => updateTheme({ headerBanner: undefined })}
+                onClick={() => {
+                  const updatedTheme = { ...form.theme };
+                  delete updatedTheme.headerBanner;
+                  onUpdateForm({
+                    ...form,
+                    theme: updatedTheme,
+                    updatedAt: new Date().toISOString(),
+                  });
+                }}
                 className="text-xs text-rose-600 hover:underline pt-1 block"
               >
                 Remove Header Banner

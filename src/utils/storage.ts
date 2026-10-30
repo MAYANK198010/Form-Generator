@@ -1,4 +1,4 @@
-import { Form, FormSubmission, FormField } from '../types/form';
+import { Form, FormSubmission, FormField, FormTheme, FormSettings } from '../types/form';
 
 const STORAGE_KEY_FORMS = 'ecast_forms_data_v1';
 const STORAGE_KEY_ACTIVE_ID = 'ecast_forms_active_id_v1';
@@ -303,21 +303,21 @@ export function normalizeForm(raw: any): Form {
   const title = typeof raw.title === 'string' ? raw.title : 'Untitled Survey';
   const description = typeof raw.description === 'string' ? raw.description : '';
 
-  const theme = {
+  const theme: FormTheme = {
     accentColor: raw.theme?.accentColor || 'indigo',
-    headerBanner: raw.theme?.headerBanner || undefined,
     fontFamily: raw.theme?.fontFamily || 'sans',
     borderRadius: raw.theme?.borderRadius || 'rounded-xl',
     showProgressBar: raw.theme?.showProgressBar ?? true,
+    ...(raw.theme?.headerBanner ? { headerBanner: raw.theme.headerBanner } : {}),
   };
 
-  const settings = {
+  const settings: FormSettings = {
     title: raw.settings?.title || title,
     description: raw.settings?.description || description,
     customDomain: raw.settings?.customDomain || 'form.ecast.store',
     customSlug: raw.settings?.customSlug || 'survey-2026',
     isLive: typeof raw.settings?.isLive === 'boolean' ? raw.settings.isLive : true,
-    publishedAt: raw.settings?.publishedAt || undefined,
+    ...(raw.settings?.publishedAt ? { publishedAt: raw.settings.publishedAt } : {}),
     isAcceptingResponses: raw.settings?.isAcceptingResponses ?? true,
     closedMessage: raw.settings?.closedMessage || 'This survey is no longer accepting responses.',
     confirmationMessage: raw.settings?.confirmationMessage || 'Thank you for your feedback!',
@@ -329,26 +329,31 @@ export function normalizeForm(raw: any): Form {
       format: raw.settings?.autoExport?.format || 'csv',
       webhookUrl: raw.settings?.autoExport?.webhookUrl || 'https://api.ecast.store/v1/integrations/survey-webhook',
       emailRecipients: raw.settings?.autoExport?.emailRecipients || 'insights@ecast.store',
-      lastExportAt: raw.settings?.autoExport?.lastExportAt || undefined,
+      ...(raw.settings?.autoExport?.lastExportAt ? { lastExportAt: raw.settings.autoExport.lastExportAt } : {}),
       totalAutoDispatched: raw.settings?.autoExport?.totalAutoDispatched || 0,
     },
   };
 
   const fields: FormField[] = Array.isArray(raw.fields)
-    ? raw.fields.map((f: any, idx: number) => ({
-        id: typeof f?.id === 'string' && f.id ? f.id : `f_${idx}_${Math.random().toString(36).substring(2, 6)}`,
-        type: f?.type || 'short_text',
-        label: typeof f?.label === 'string' ? f.label : `Question ${idx + 1}`,
-        description: typeof f?.description === 'string' ? f.description : '',
-        required: !!f?.required,
-        placeholder: typeof f?.placeholder === 'string' ? f.placeholder : '',
-        options: Array.isArray(f?.options) ? f.options : undefined,
-        scaleMin: typeof f?.scaleMin === 'number' ? f.scaleMin : undefined,
-        scaleMax: typeof f?.scaleMax === 'number' ? f.scaleMax : undefined,
-        scaleMinLabel: f?.scaleMinLabel,
-        scaleMaxLabel: f?.scaleMaxLabel,
-        ratingStars: f?.ratingStars || (f?.type === 'rating' ? 5 : undefined),
-      }))
+    ? raw.fields.map((f: any, idx: number) => {
+        const field: FormField = {
+          id: typeof f?.id === 'string' && f.id ? f.id : `f_${idx}_${Math.random().toString(36).substring(2, 6)}`,
+          type: f?.type || 'short_text',
+          label: typeof f?.label === 'string' ? f.label : `Question ${idx + 1}`,
+          description: typeof f?.description === 'string' ? f.description : '',
+          required: !!f?.required,
+          placeholder: typeof f?.placeholder === 'string' ? f.placeholder : '',
+        };
+        if (Array.isArray(f?.options)) field.options = f.options;
+        if (typeof f?.scaleMin === 'number') field.scaleMin = f.scaleMin;
+        if (typeof f?.scaleMax === 'number') field.scaleMax = f.scaleMax;
+        if (typeof f?.scaleMinLabel === 'string') field.scaleMinLabel = f.scaleMinLabel;
+        if (typeof f?.scaleMaxLabel === 'string') field.scaleMaxLabel = f.scaleMaxLabel;
+        if (typeof f?.ratingStars === 'number') field.ratingStars = f.ratingStars;
+        else if (f?.type === 'rating') field.ratingStars = 5;
+        if (typeof f?.acceptedFileTypes === 'string') field.acceptedFileTypes = f.acceptedFileTypes;
+        return field;
+      })
     : defaultForm.fields;
 
   return {

@@ -46,6 +46,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedAltLink, setCopiedAltLink] = useState(false);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
+  const [qrTarget, setQrTarget] = useState<'production' | 'current'>('production');
   const [isTestingWebhook, setIsTestingWebhook] = useState(false);
   const [webhookResult, setWebhookResult] = useState<{
     success: boolean;
@@ -348,15 +349,50 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
 
               {/* QR Code Section */}
               <div className="border border-slate-200/90 rounded-2xl p-5 bg-white flex flex-col sm:flex-row items-center gap-6">
-                <SurveyQRCode url={publicProductionUrl} size={135} />
+                <SurveyQRCode
+                  url={qrTarget === 'production' ? publicProductionUrl : publicCurrentHostUrl}
+                  size={140}
+                />
 
-                <div className="space-y-2 text-center sm:text-left">
-                  <h5 className="font-bold text-slate-900 text-sm">Scan to Fill Survey</h5>
-                  <p className="text-slate-500 text-xs max-w-xs leading-relaxed">
-                    Print this QR code on flyers, packaging, menus, or slides. Respondents can scan from their phone and submit responses directly.
-                  </p>
+                <div className="space-y-3 text-center sm:text-left flex-1">
+                  <div>
+                    <h5 className="font-bold text-slate-900 text-sm">Scan with Phone Camera to Fill Survey</h5>
+                    <p className="text-slate-500 text-xs leading-relaxed mt-0.5">
+                      Respondents scanning this QR code are taken directly to the clean, respondent questionnaire with no editor controls.
+                    </p>
+                  </div>
+
+                  {/* QR Target Switcher */}
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-semibold text-slate-600 block">QR Code Destination:</span>
+                    <div className="inline-flex p-0.5 bg-slate-100 rounded-lg text-[11px] font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setQrTarget('production')}
+                        className={`px-2.5 py-1 rounded-md transition-all ${
+                          qrTarget === 'production'
+                            ? 'bg-white text-indigo-700 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        form.ecast.store (Production)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQrTarget('current')}
+                        className={`px-2.5 py-1 rounded-md transition-all ${
+                          qrTarget === 'current'
+                            ? 'bg-white text-indigo-700 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Current Preview Host
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="text-[11px] text-emerald-700 font-medium">
-                    ✓ Directs to respondent mode only (no editor access)
+                    ✓ Standard ISO QR code — works with standard iOS & Android cameras
                   </div>
                 </div>
               </div>
