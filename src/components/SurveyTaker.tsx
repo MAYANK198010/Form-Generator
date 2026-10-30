@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import confetti from 'canvas-confetti';
 import {
   CheckCircle2,
   Star,
@@ -117,15 +116,14 @@ export const SurveyTaker: React.FC<SurveyTakerProps> = ({
 
     setIsSubmitted(true);
 
-    try {
-      confetti({
-        particleCount: 90,
-        spread: 60,
-        origin: { y: 0.6 },
-      });
-    } catch (e) {
-      // ignore
-    }
+    import('canvas-confetti')
+      .then((mod) => {
+        const fn = mod.default || mod;
+        if (typeof fn === 'function') {
+          fn({ particleCount: 90, spread: 60, origin: { y: 0.6 } });
+        }
+      })
+      .catch(() => {});
   };
 
   const handleReset = () => {

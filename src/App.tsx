@@ -14,6 +14,7 @@ import {
   loadActiveFormId,
   saveActiveFormId,
   SAMPLE_FORMS,
+  normalizeForm,
 } from './utils/storage';
 import { Header } from './components/Header';
 import { FormBuilder } from './components/FormBuilder';
@@ -25,7 +26,10 @@ import { FormsListModal } from './components/FormsListModal';
 import { CheckCircle2, Zap } from 'lucide-react';
 
 export default function App() {
-  const [forms, setForms] = useState<Form[]>(() => loadStoredForms());
+  const [forms, setForms] = useState<Form[]>(() => {
+    const loaded = loadStoredForms();
+    return loaded && loaded.length > 0 ? loaded : SAMPLE_FORMS;
+  });
   const [activeFormId, setActiveFormId] = useState<string>(() => loadActiveFormId());
   const [submissionsMap, setSubmissionsMap] = useState<Record<string, FormSubmission[]>>(() =>
     loadSubmissions()
@@ -38,8 +42,9 @@ export default function App() {
   const [isFormSwitcherOpen, setIsFormSwitcherOpen] = useState(false);
   const [liveToast, setLiveToast] = useState<string | null>(null);
 
-  // Active Form resolution
-  const currentForm = forms.find((f) => f.id === activeFormId) || forms[0] || SAMPLE_FORMS[0];
+  // Active Form resolution - always normalized
+  const rawForm = forms.find((f) => f.id === activeFormId) || forms[0] || SAMPLE_FORMS[0];
+  const currentForm = normalizeForm(rawForm);
   const activeSubmissions = submissionsMap[currentForm.id] || [];
 
   // Persist forms

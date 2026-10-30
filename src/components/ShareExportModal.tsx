@@ -49,7 +49,16 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
 
   if (!isOpen) return null;
 
-  const publicUrl = `https://${form.settings.customDomain}/s/${form.settings.customSlug}`;
+  const autoExport = form.settings?.autoExport || {
+    enabled: true,
+    frequency: 'realtime' as const,
+    format: 'csv' as const,
+    webhookUrl: 'https://api.ecast.store/v1/integrations/survey-webhook',
+    emailRecipients: 'insights@ecast.store',
+    totalAutoDispatched: 0,
+  };
+
+  const publicUrl = `https://${form.settings?.customDomain || 'form.ecast.store'}/s/${form.settings?.customSlug || 'survey-2026'}`;
   const embedCode = `<iframe src="${publicUrl}" width="100%" height="700" frameborder="0" marginheight="0" marginwidth="0" style="border-radius: 16px; border: 1px solid #e2e8f0; max-width: 800px; width: 100%;">Loading survey...</iframe>`;
 
   const handleCopyLink = () => {
@@ -81,7 +90,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
     };
 
     const res = await simulateWebhookDispatch(
-      form.settings.autoExport.webhookUrl,
+      autoExport.webhookUrl,
       form,
       sampleSub
     );
@@ -96,7 +105,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
       settings: {
         ...form.settings,
         autoExport: {
-          ...form.settings.autoExport,
+          ...autoExport,
           ...patch,
         },
       },
@@ -301,18 +310,18 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   <span className="font-semibold text-slate-700">Auto-Export</span>
                   <input
                     type="checkbox"
-                    checked={form.settings.autoExport.enabled}
+                    checked={autoExport.enabled}
                     onChange={(e) => updateAutoExport({ enabled: e.target.checked })}
                     className="sr-only"
                   />
                   <div
                     className={`w-10 h-6 rounded-full transition-colors relative ${
-                      form.settings.autoExport.enabled ? 'bg-indigo-600' : 'bg-slate-300'
+                      autoExport.enabled ? 'bg-indigo-600' : 'bg-slate-300'
                     }`}
                   >
                     <div
                       className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
-                        form.settings.autoExport.enabled ? 'left-5' : 'left-1'
+                        autoExport.enabled ? 'left-5' : 'left-1'
                       }`}
                     />
                   </div>
@@ -325,7 +334,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 <div className="flex gap-2">
                   <input
                     type="url"
-                    value={form.settings.autoExport.webhookUrl}
+                    value={autoExport.webhookUrl}
                     onChange={(e) => updateAutoExport({ webhookUrl: e.target.value })}
                     placeholder="https://api.ecast.store/v1/integrations/survey-webhook"
                     className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -371,7 +380,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                 <div className="space-y-1.5">
                   <label className="font-semibold text-slate-700">Sync Cadence</label>
                   <select
-                    value={form.settings.autoExport.frequency}
+                    value={autoExport.frequency}
                     onChange={(e) => updateAutoExport({ frequency: e.target.value as any })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs"
                   >
@@ -385,7 +394,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
                   <label className="font-semibold text-slate-700">Notification Emails</label>
                   <input
                     type="text"
-                    value={form.settings.autoExport.emailRecipients}
+                    value={autoExport.emailRecipients}
                     onChange={(e) => updateAutoExport({ emailRecipients: e.target.value })}
                     placeholder="insights@ecast.store"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs"
@@ -397,7 +406,7 @@ export const ShareExportModal: React.FC<ShareExportModalProps> = ({
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/70 text-slate-600 text-[11px] flex items-center justify-between">
                 <span>Total Dispatched Submissions:</span>
                 <span className="font-bold font-mono text-indigo-600">
-                  {form.settings.autoExport.totalAutoDispatched || 0} calls
+                  {autoExport.totalAutoDispatched || 0} calls
                 </span>
               </div>
             </div>

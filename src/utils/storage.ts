@@ -1,4 +1,4 @@
-import { Form, FormSubmission } from '../types/form';
+import { Form, FormSubmission, FormField } from '../types/form';
 
 const STORAGE_KEY_FORMS = 'ecast_forms_data_v1';
 const STORAGE_KEY_ACTIVE_ID = 'ecast_forms_active_id_v1';
@@ -284,60 +284,78 @@ export const SAMPLE_SUBMISSIONS: Record<string, FormSubmission[]> = {
         f_feedback_text: 'Our students and staff picked it up instantly without any training.',
       },
     },
-    {
-      id: 'sub_6',
-      formId: 'csat-survey-2026',
-      submittedAt: new Date(Date.now() - 1000 * 60 * 540).toISOString(),
-      durationSeconds: 85,
-      device: 'Desktop',
-      location: 'Toronto, CA',
-      answers: {
-        f_nps: 10,
-        f_overall_satisfaction: 5,
-        f_favorite_features: ['Fast Checkout & Order Tracking', 'Clean & Intuitive User Interface'],
-        f_frequency: 'Daily',
-        f_ease_of_use: 5,
-        f_department: 'Technology & Software',
-        f_feedback_text: 'The best survey builder we have tried this year.',
-        f_contact_email: 'dev@acmecorp.ca',
-      },
-    },
-    {
-      id: 'sub_7',
-      formId: 'csat-survey-2026',
-      submittedAt: new Date(Date.now() - 1000 * 60 * 720).toISOString(),
-      durationSeconds: 130,
-      device: 'Mobile',
-      location: 'Singapore, SG',
-      answers: {
-        f_nps: 7,
-        f_overall_satisfaction: 3,
-        f_favorite_features: ['Automated Reporting & Exports'],
-        f_frequency: 'Once a month',
-        f_ease_of_use: 3,
-        f_department: 'E-Commerce & Retail',
-        f_feedback_text: 'Need slightly more theme customization options for dark mode.',
-      },
-    },
-    {
-      id: 'sub_8',
-      formId: 'csat-survey-2026',
-      submittedAt: new Date(Date.now() - 1000 * 60 * 1100).toISOString(),
-      durationSeconds: 115,
-      device: 'Desktop',
-      location: 'New York, US',
-      answers: {
-        f_nps: 10,
-        f_overall_satisfaction: 5,
-        f_favorite_features: ['Fast Checkout & Order Tracking', 'Integrations & Webhook Sync', 'Clean & Intuitive User Interface'],
-        f_frequency: 'Daily',
-        f_ease_of_use: 5,
-        f_department: 'Technology & Software',
-        f_feedback_text: 'Real-time charts update smoothly without lag. Very impressive.',
-      },
-    },
   ],
 };
+
+/**
+ * Normalizes any form data ensuring all properties, settings, themes, and fields
+ * have bulletproof defaults. This completely prevents null/undefined crashes.
+ */
+export function normalizeForm(raw: any): Form {
+  const defaultForm = SAMPLE_FORMS[0];
+  if (!raw || typeof raw !== 'object') return defaultForm;
+
+  const id = typeof raw.id === 'string' && raw.id ? raw.id : 'form_' + Math.random().toString(36).substring(2, 8);
+  const title = typeof raw.title === 'string' ? raw.title : 'Untitled Survey';
+  const description = typeof raw.description === 'string' ? raw.description : '';
+
+  const theme = {
+    accentColor: raw.theme?.accentColor || 'indigo',
+    headerBanner: raw.theme?.headerBanner || undefined,
+    fontFamily: raw.theme?.fontFamily || 'sans',
+    borderRadius: raw.theme?.borderRadius || 'rounded-xl',
+    showProgressBar: raw.theme?.showProgressBar ?? true,
+  };
+
+  const settings = {
+    title: raw.settings?.title || title,
+    description: raw.settings?.description || description,
+    customDomain: raw.settings?.customDomain || 'form.ecast.store',
+    customSlug: raw.settings?.customSlug || 'survey-2026',
+    isAcceptingResponses: raw.settings?.isAcceptingResponses ?? true,
+    closedMessage: raw.settings?.closedMessage || 'This survey is no longer accepting responses.',
+    confirmationMessage: raw.settings?.confirmationMessage || 'Thank you for your feedback!',
+    allowMultipleSubmissions: raw.settings?.allowMultipleSubmissions ?? true,
+    showQuestionNumbers: raw.settings?.showQuestionNumbers ?? true,
+    autoExport: {
+      enabled: raw.settings?.autoExport?.enabled ?? true,
+      frequency: raw.settings?.autoExport?.frequency || 'realtime',
+      format: raw.settings?.autoExport?.format || 'csv',
+      webhookUrl: raw.settings?.autoExport?.webhookUrl || 'https://api.ecast.store/v1/integrations/survey-webhook',
+      emailRecipients: raw.settings?.autoExport?.emailRecipients || 'insights@ecast.store',
+      lastExportAt: raw.settings?.autoExport?.lastExportAt || undefined,
+      totalAutoDispatched: raw.settings?.autoExport?.totalAutoDispatched || 0,
+    },
+  };
+
+  const fields: FormField[] = Array.isArray(raw.fields)
+    ? raw.fields.map((f: any, idx: number) => ({
+        id: typeof f?.id === 'string' && f.id ? f.id : `f_${idx}_${Math.random().toString(36).substring(2, 6)}`,
+        type: f?.type || 'short_text',
+        label: typeof f?.label === 'string' ? f.label : `Question ${idx + 1}`,
+        description: typeof f?.description === 'string' ? f.description : '',
+        required: !!f?.required,
+        placeholder: typeof f?.placeholder === 'string' ? f.placeholder : '',
+        options: Array.isArray(f?.options) ? f.options : undefined,
+        scaleMin: typeof f?.scaleMin === 'number' ? f.scaleMin : undefined,
+        scaleMax: typeof f?.scaleMax === 'number' ? f.scaleMax : undefined,
+        scaleMinLabel: f?.scaleMinLabel,
+        scaleMaxLabel: f?.scaleMaxLabel,
+        ratingStars: f?.ratingStars || (f?.type === 'rating' ? 5 : undefined),
+      }))
+    : defaultForm.fields;
+
+  return {
+    id,
+    title,
+    description,
+    theme,
+    settings,
+    fields,
+    createdAt: raw.createdAt || new Date().toISOString(),
+    updatedAt: raw.updatedAt || new Date().toISOString(),
+  };
+}
 
 export function loadStoredForms(): Form[] {
   try {
@@ -345,11 +363,11 @@ export function loadStoredForms(): Form[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        return parsed.map(normalizeForm);
       }
     }
   } catch (e) {
-    console.warn('Error reading stored forms:', e);
+    console.warn('Error reading stored forms, recovering with defaults:', e);
   }
   // Initialize with sample forms
   saveStoredForms(SAMPLE_FORMS);
@@ -370,7 +388,21 @@ export function loadSubmissions(): Record<string, FormSubmission[]> {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
-        return parsed;
+        const cleaned: Record<string, FormSubmission[]> = {};
+        for (const [formId, subList] of Object.entries(parsed)) {
+          if (Array.isArray(subList)) {
+            cleaned[formId] = subList.map((s: any) => ({
+              id: s?.id || 'sub_' + Math.random().toString(36).substring(2, 8),
+              formId: formId,
+              submittedAt: s?.submittedAt || new Date().toISOString(),
+              durationSeconds: typeof s?.durationSeconds === 'number' ? s.durationSeconds : 90,
+              answers: s?.answers && typeof s.answers === 'object' ? s.answers : {},
+              device: s?.device || 'Desktop',
+              location: s?.location || 'San Francisco, US',
+            }));
+          }
+        }
+        return cleaned;
       }
     }
   } catch (e) {
@@ -393,18 +425,23 @@ export function addSubmission(formId: string, submission: Omit<FormSubmission, '
   const formSubmissions = current[formId] || [];
   const newSubmission: FormSubmission = {
     ...submission,
+    answers: submission.answers || {},
     id: 'sub_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now().toString(36),
   };
   current[formId] = [newSubmission, ...formSubmissions];
   saveSubmissions(current);
 
   // Check automated export dispatch
-  const forms = loadStoredForms();
-  const form = forms.find((f) => f.id === formId);
-  if (form && form.settings.autoExport?.enabled) {
-    form.settings.autoExport.totalAutoDispatched = (form.settings.autoExport.totalAutoDispatched || 0) + 1;
-    form.settings.autoExport.lastExportAt = new Date().toISOString();
-    saveStoredForms(forms);
+  try {
+    const forms = loadStoredForms();
+    const form = forms.find((f) => f.id === formId);
+    if (form && form.settings?.autoExport?.enabled) {
+      form.settings.autoExport.totalAutoDispatched = (form.settings.autoExport.totalAutoDispatched || 0) + 1;
+      form.settings.autoExport.lastExportAt = new Date().toISOString();
+      saveStoredForms(forms);
+    }
+  } catch (e) {
+    console.warn('Auto export notification failed:', e);
   }
 
   return newSubmission;
